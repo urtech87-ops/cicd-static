@@ -1,0 +1,57 @@
+# ══════════════════════════════════════════════════════════════════════
+#  CI/CD — test the HTML, then deploy to Netlify.
+#  One file does both: CI (the test gate) and CD (the deploy).
+# ══════════════════════════════════════════════════════════════════════
+name: CI-CD
+
+# ── TRIGGER ──────────────────────────────────────────────────────────
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:          # adds a manual "Run workflow" button
+
+jobs:
+
+  # ── JOB 1: CI — the quality gate ───────────────────────────────────
+  # Prove index.html is present and valid BEFORE anything deploys.
+  test:
+    name: CI — test the page
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check index.html exists
+        run: test -f index.html
+
+      - name: Check it has a closing </html> tag
+        run: grep -q "</html>" index.html
+
+      - name: Report
+        run: echo "CI passed — index.html is present and valid."
+
+  # ── JOB 2: CD — deploy to Netlify ──────────────────────────────────
+  # needs: test  ->  this only runs if CI passed. That is the gate.
+  # if: main     ->  only deploy from the main branch, never from a PR.
+  deploy:
+    name: CD — deploy to Netlify
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Netlify
+        uses: nwtgck/actions-netlify@v3.0
+        with:
+          publish-dir: '.'                 # the site files are at the repo root
+          production-deploy: true          # deploy as the live production site
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          deploy-message: "Deployed from GitHub Actions"
+          enable-commit-comment: false
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+        timeout-minutes: 2
